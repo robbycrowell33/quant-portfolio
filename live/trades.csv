@@ -1,0 +1,11 @@
+date,ticker,qty,ref_price,reason,order_id
+2026-11-25,DBC,715,29.18,rebalance,e6850ff6-1f2c-4ac4-9ebc-28930bff2394
+2026-11-25,EEM,-71,55.675,rebalance,f1e87920-7432-45e0-83ca-f06a92cca13b
+2026-11-25,EFA,74,98.67,rebalance,4880bcf8-9350-42d2-aa4c-6da15fe920e4
+2026-11-25,GLD,-46,322.55,rebalance,ecfbccd7-5916-4810-90e0-5c9a87137f11
+2026-11-25,IEF,-433,92.22,rebalance,15a1a972-3245-4a15-8ff8-fe6aa91a099e
+2026-11-25,IWM,-22,266.895,rebalance,2e5a5885-4e68-482b-88df-a59a0ee600ec
+2026-11-25,QQQ,6,625.019,rebalance,9242d0aa-dbe6-4bee-8666-260c830ebd63
+2026-11-25,SPY,26,711.5279,rebalance,bf59056d-79bb-4b7f-b33f-4c50b03dfda3
+2026-11-25,TLT,-412,82.415,rebalance,fec5aca0-7808-4d18-902c-170aaab63b3e
+2026-11-25,VNQ,-82,95.76,rebalance,ebb24f7b-ac29-470f-9440-a11660b5f674
