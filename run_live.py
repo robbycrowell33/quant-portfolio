@@ -24,7 +24,7 @@ import pandas as pd
 import config
 from core import broker as brokers, data
 from core.portfolio import apply_band
-from models import REGISTRY as MODELS
+from models import REGISTRY as MODELS, required_tickers
 
 LIVE_DIR = Path("live")
 
@@ -49,7 +49,7 @@ def combined_targets(prices, asof, cur_w, prev_state, prev_signals, force=False)
     for name, alloc in config.SLEEVES.items():
         fn, cfg = MODELS[name]
         if sleeve_due(name, asof, prev_state, force):
-            w, det = fn(prices[cfg["universe"]], cfg)
+            w, det = fn(prices.reindex(columns=cfg["universe"]), cfg)
             w = w * alloc
             details[name] = det.reset_index(names="ticker").to_dict(orient="records")
             sleeve_asof[name] = str(asof.date())
@@ -73,7 +73,11 @@ def paper_targets(prices, asof, prev_state, prev_signals, force=False):
     for name in PAPER:
         fn, cfg = MODELS[name]
         if sleeve_due(name, asof, prev_state, force, key="paper_asof"):
-            w, det = fn(prices[cfg["universe"]], cfg)
+            try:
+                w, det = fn(prices.reindex(columns=cfg["universe"]), cfg)
+            except Exception as e:      # a broken paper model must never stop live trading
+                print(f"  paper model {name} failed: {e}")
+                w, det = pd.Series(dtype=float), pd.DataFrame()
             weights[name] = w.to_dict()
             details[name] = det.reset_index(names="ticker").to_dict(orient="records")
             paper_asof[name] = str(asof.date())
@@ -133,7 +137,8 @@ def main():
         live_dir = Path("live_test")
     else:
         start = (pd.Timestamp.today() - pd.DateOffset(days=600)).strftime("%Y-%m-%d")
-        prices = data.get_prices(universe, start=start)
+        prices = data.get_prices(universe, start=start,
+                                 required=required_tickers(config.SLEEVES))   # paper models can't block live trading
         brk = brokers.AlpacaBroker()
         live_dir = LIVE_DIR
     live_dir.mkdir(exist_ok=True)

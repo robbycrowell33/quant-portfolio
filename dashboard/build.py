@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import config  # noqa: E402
 from core import data, metrics  # noqa: E402
-from models import REGISTRY  # noqa: E402
+from models import REGISTRY, required_tickers  # noqa: E402
 
 
 def series(s: pd.Series, digits=5):
@@ -68,7 +68,7 @@ def sleeve_shadow(weights_csv: Path, prices: pd.DataFrame):
     if w is None or w.empty:
         return None
     w = w.drop_duplicates("date", keep="last").set_index("date").sort_index().fillna(0.0)
-    cols = [c for c in w.columns if c in prices.columns]
+    cols = [c for c in w.columns if c in prices.columns and c != "date"]
     rets = prices[cols].pct_change()
     held = w[cols].reindex(rets.index).ffill().shift(1)       # earn the day after deciding
     daily = (held * rets).sum(axis=1).loc[w.index[0]:]
@@ -98,7 +98,8 @@ def main():
         if args.test:
             prices = data.synthetic_prices(tickers).loc[start - pd.Timedelta(days=10):eq_df.index[-1]]
         else:
-            prices = data.get_prices(tickers, start=(start - pd.Timedelta(days=10)).strftime("%Y-%m-%d"))
+            prices = data.get_prices(tickers, start=(start - pd.Timedelta(days=10)).strftime("%Y-%m-%d"),
+                                     required=set(bench_mix) | required_tickers(config.SLEEVES))
         b_rets = sum(prices[t].pct_change() * w for t, w in bench_mix.items()).loc[start:]
         bench = (1 + b_rets.iloc[1:]).cumprod().reindex(b_rets.index).fillna(1.0)
         bench = bench.reindex(eq_df.index).ffill() * eq_df["equity"].iloc[0]

@@ -451,7 +451,24 @@ function modelPage(app, m) {
   app.append(liveCard);
 
   // signals
-  if (m.signals && m.signals.length && m.signals[0].rank !== undefined) {
+  if (m.signals && m.signals.length && m.signals[0].beta !== undefined) {
+    const held = m.signals.filter(r => Math.abs(r.weight) > 1e-6);
+    const next = m.signals.filter(r => Math.abs(r.weight) <= 1e-6 && r.rank > 0).sort((a, b) => a.rank - b.rank).slice(0, 10);
+    const rows = [...held.sort((a, b) => a.rank - b.rank), ...next];
+    const s0 = m.signals[0];
+    app.append(card("Current signals", "Ranking" + (m.signals_asof ? " as of " + fmtDate(m.signals_asof) : "") + ". " + (m.signals_note || "") +
+      " Longs' beta " + num(s0.long_beta, 2) + ", hedge " + pct(m.signals.find(r => r.leg === "hedge")?.weight, 1, true) + ", net beta " + num(s0.net_beta, 2) +
+      ". Showing the holdings plus the next 10 in line (" + m.signals.filter(r => r.rank > 0).length + " stocks ranked).",
+      table([
+        {h: "Rank", n: true, f: r => r.rank > 0 ? r.rank : "–"},
+        {h: "Ticker", f: r => $("b", {}, r.ticker)},
+        {h: "1y volatility", n: true, f: r => pct(r.vol_ann, 1)},
+        {h: "Beta", n: true, f: r => num(r.beta, 2)},
+        {h: "Weight in sleeve", n: true, f: r => Math.abs(r.weight) < 1e-6 ? "–" : pct(r.weight, 1, true)},
+        {h: "Position", f: r => r.leg === "hedge" ? $("span", {class: "dir"}, $("i", {style: "background:var(--short)"}), "Short (hedge)")
+          : r.leg === "long" ? $("span", {class: "dir"}, $("i", {style: "background:var(--long)"}), "Long") : $("span", {style: "color:var(--ink-2)"}, "Not held")},
+      ], rows)));
+  } else if (m.signals && m.signals.length && m.signals[0].rank !== undefined) {
     const rows = [...m.signals].sort((a, b) => a.rank - b.rank);
     app.append(card("Current signals", "Ranking" + (m.signals_asof ? " as of " + fmtDate(m.signals_asof) : "") + ". " + (m.signals_note || ""),
       table([
@@ -487,6 +504,7 @@ function modelPage(app, m) {
     const bLog = $("button", {class: "ghost on", onclick: () => { log = true; bLog.classList.add("on"); bLin.classList.remove("on"); render(); }}, "Log");
     const bLin = $("button", {class: "ghost", onclick: () => { log = false; bLin.classList.add("on"); bLog.classList.remove("on"); render(); }}, "Linear");
     render();
+    if (m.backtest_note) app.append($("div", {class: "paperbanner"}, $("b", {}, "Backtest disclaimer"), m.backtest_note));
     const head = $("section", {class: "card"}, $("div", {class: "toggle"}, bLog, bLin), $("h2", {}, "Backtest: growth of $1"),
       $("p", {class: "sub"}, "Weekly, " + B.curves.model[0][0].slice(0, 4) + " to " + B.curves.model.at(-1)[0].slice(0, 4) + (B.synthetic ? " (synthetic data)" : "") + ". Log scale shows percentage moves at equal size."), holder);
     app.append(head);

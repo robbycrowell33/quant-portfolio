@@ -3,9 +3,12 @@ import numpy as np
 import pandas as pd
 
 
-def get_prices(tickers, start="2006-01-01", end=None, attempts=3) -> pd.DataFrame:
+def get_prices(tickers, start="2006-01-01", end=None, attempts=3, required=None) -> pd.DataFrame:
     """Download adjusted closes. Single-threaded with retries: yfinance's parallel
-    mode can randomly fail a ticker ('database is locked' on its cache file)."""
+    mode can randomly fail a ticker ('database is locked' on its cache file).
+
+    required: tickers that MUST download (default: all). Anything else that fails is
+    dropped with a warning, so e.g. one bad stock in a paper model can't block live trading."""
     import tempfile
     import time
     import yfinance as yf
@@ -28,9 +31,14 @@ def get_prices(tickers, start="2006-01-01", end=None, attempts=3) -> pd.DataFram
             if t in df and df[t].notna().any():
                 frames[t] = df[t]
                 missing.remove(t)
+    must = set(tickers) if required is None else set(required)
+    fatal = [t for t in missing if t in must]
+    if fatal:
+        raise RuntimeError(f"No data for required tickers: {fatal} after {attempts} attempts")
     if missing:
-        raise RuntimeError(f"No data for: {missing} after {attempts} attempts")
-    return pd.DataFrame(frames)[list(tickers)].dropna(how="all").ffill()
+        print(f"  warning: no data for {missing}, skipping them")
+    have = [t for t in tickers if t in frames]
+    return pd.DataFrame(frames)[have].dropna(how="all").ffill()
 
 
 def synthetic_prices(tickers, start="2006-01-01", end="2026-11-20", seed=7) -> pd.DataFrame:

@@ -62,12 +62,40 @@ MODEL_INFO["xsmom"] = {
     ],
 }
 
+MODEL_INFO["qlv"] = {
+    "name": "Quality Low-Vol (market-hedged)",
+    "short": "QLV",
+    "kind": "signal",
+    "status": "paper",
+    "version": "v1",
+    "started": "2026-11-27",
+    "paper_reason": "New model, under review. Gets capital only if it passes the hedge tests: beats holding cash and pays off when TSMOM loses.",
+    "summary": "Long the 20 calmest stocks in QUAL (MSCI's quality index), short the S&P 500 to cancel market exposure.",
+    "how_it_works": [
+        "Universe: the ~125 stocks in iShares QUAL (high ROE, low debt, stable earnings), refreshed quarterly.",
+        "Rank them by 1-year volatility and go long the 20 calmest, weighted inverse to volatility.",
+        "Short IVV (S&P 500) sized to the longs' beta, so the sleeve's market exposure is about zero.",
+        "Scaled to 10% annualized volatility, max 10% per stock. Rebalances monthly on the first Friday.",
+    ],
+    "how_to_read": [
+        "It bets on the low-risk anomaly: calm, profitable companies have historically beaten their risk-adjusted expectations.",
+        "Because the market is hedged out, it can make money in a selloff if quality stocks fall less than the index.",
+        "It tends to lag in speculative rallies led by volatile stocks (e.g. 2020-21, 2023 tech).",
+        "Hedge test vs TSMOM: does it beat holding cash, and does it make money when TSMOM loses?",
+    ],
+    "signals_note": "Ranked by 1-year volatility, calmest first. Top 20 are held long; IVV is the market hedge.",
+    "backtest_note": "Heads up: this backtest is optimistic. It uses today's QUAL holdings for all 20 years, so it only "
+                     "includes companies that turned out to be high quality and misses ones that faded or failed. "
+                     "QUAL hedged and USMV hedged are real ETFs since launch (2013 and 2011) and are the fair comparison.",
+}
+
 ASSET_CLASS = {
     "SPY": "US equity", "QQQ": "US equity", "IWM": "US equity",
     "EFA": "Intl equity", "EEM": "Intl equity",
     "TLT": "Bonds", "IEF": "Bonds",
     "GLD": "Commodities", "DBC": "Commodities",
     "VNQ": "Real estate",
+    "IVV": "Hedge",
     **{t: "Sectors" for t in ["XLB", "XLC", "XLE", "XLF", "XLI", "XLK", "XLP", "XLRE", "XLU", "XLV", "XLY"]},
     **{t: "Industries" for t in ["SMH", "IGV", "XBI", "IBB", "XPH", "KRE", "KIE", "XHB", "XRT",
                                  "XME", "XOP", "OIH", "ITA", "IYT"]},
@@ -115,6 +143,31 @@ XSMOM = {
     "max_weight": 0.25,
     "band": (0.02, 0.20),
     "rebalance": "monthly",    # first Friday of each month
+}
+
+# ---- Quality low-vol, market-hedged (model #3)
+def _quality_universe():
+    """Current QUAL holdings, refreshed by tools/refresh_quality_universe.py."""
+    import os
+    import pandas as pd
+    from pathlib import Path
+    f = Path(os.environ.get("QUALITY_UNIVERSE_FILE", Path(__file__).parent / "data" / "quality_universe.csv"))
+    return pd.read_csv(f)["ticker"].tolist() if f.exists() else []
+
+
+QLV = {
+    "hedge": "IVV",            # S&P 500 ETF used to cancel market exposure (not SPY, so no overlap with TSMOM)
+    "universe": [*_quality_universe(), "IVV"],
+    "n_long": 20,              # the 20 least volatile quality stocks
+    "vol_window": 252,         # 1-year daily volatility for ranking and weighting
+    "beta_window": 252,        # 1-year beta to the S&P 500 for the hedge
+    "min_assets": 40,          # need at least 40 stocks with full history to trade
+    "target_vol": 0.10,
+    "max_weight": 0.10,        # cap per stock
+    "max_gross": 2.0,
+    "band": (0.01, 0.20),      # smaller absolute band: positions are smaller than the ETF sleeves'
+    "rebalance": "monthly",
+    "compare_etfs": ["QUAL", "USMV"],   # real ETFs, market-hedged the same way, for an unbiased reference
 }
 
 # ---- Backtest

@@ -19,13 +19,14 @@ import pandas as pd
 
 import config
 from core import backtest, data, metrics
-from models import REGISTRY
+from models import REGISTRY, required_tickers
 
 bt = config.BACKTEST
 
 
-def load_inputs(tickers, synthetic):
-    prices = data.synthetic_prices(tickers) if synthetic else data.get_prices(tickers, start=bt["start"])
+def load_inputs(tickers, synthetic, required=None):
+    prices = data.synthetic_prices(tickers) if synthetic else \
+        data.get_prices(tickers, start=bt["start"], required=required)
     rf = None
     if bt.get("cash_yield"):
         rf = data.synthetic_tbill(prices.index) if synthetic else data.get_tbill_rate(start=bt["start"])
@@ -35,19 +36,29 @@ def load_inputs(tickers, synthetic):
 def run_model(mid, prices, rf, synthetic):
     fn, cfg = REGISTRY[mid]
     short = config.MODEL_INFO[mid]["short"]
+    uni = [t for t in cfg["universe"] if t in prices.columns]
     kw = dict(rebalance=bt["rebalance"], cost_bps=bt["cost_bps"], monthly=cfg.get("rebalance") == "monthly")
     fin = dict(rf=rf, borrow_bps=bt["borrow_bps"], margin_spread_bps=bt["margin_spread_bps"])
-    res, weights, trades = backtest.run(prices[cfg["universe"]], fn, cfg, band=cfg.get("band"), **fin, **kw)
+    res, weights, trades = backtest.run(prices[uni], fn, cfg, band=cfg.get("band"), **fin, **kw)
     curves = {short: res["equity"]}
     runs = {short: (res, trades)}
     if cfg.get("compare_v1"):     # original version: no band, cash earns 0
-        res1, _, trades1 = backtest.run(prices[cfg["universe"]], fn, cfg, **kw)
+        res1, _, trades1 = backtest.run(prices[uni], fn, cfg, **kw)
         res1 = res1.reindex(res.index).ffill()
         curves[short + " v1"] = res1["equity"]
         runs[short + " v1"] = (res1, trades1)
 
     bench = backtest.benchmark(prices, bt["benchmark"], res.index)
     spy = prices["SPY"].reindex(res.index); spy /= spy.iloc[0]
+    # real ETFs, market-hedged with a trailing 1-year beta, from their own launch: an unbiased reference
+    for etf in cfg.get("compare_etfs", []):
+        if etf not in prices:
+            continue
+        r_e, r_m = prices[etf].pct_change(), prices["SPY"].pct_change()
+        beta = (r_e.rolling(252).cov(r_m) / r_m.rolling(252).var()).shift(1)
+        hedged = (r_e - beta * r_m).loc[res.index].dropna()
+        if len(hedged) > 252:
+            curves[f"{etf} hedged"] = (1 + hedged).cumprod()
     stats = {k: metrics.summary(v, bench, rf) for k, v in curves.items()}
     stats["60/40"] = metrics.summary(bench, rf=rf)
     stats["SPY"] = metrics.summary(spy, rf=rf)
@@ -76,6 +87,8 @@ def run_model(mid, prices, rf, synthetic):
     eq = {mid: res["equity"]}
     if cfg.get("compare_v1"):
         eq[f"{mid}_v1"] = curves[short + " v1"]
+    for k in [k for k in curves if k.endswith(" hedged")]:
+        eq[k.replace(" ", "_").lower()] = curves[k]
     pd.DataFrame({**eq, "bench_6040": bench, "spy": spy, "gross": res["gross"], "net": res["net"]}).to_csv(out / "equity.csv")
     weights.to_csv(out / "weights.csv")
     yearly.to_csv(out / "yearly.csv")
@@ -96,7 +109,8 @@ def run_model(mid, prices, rf, synthetic):
     ax[2].stackplot(weights.index, weights.clip(lower=0).T.values, labels=weights.columns, step="post")
     ax[2].stackplot(weights.index, weights.clip(upper=0).T.values, step="post")
     ax[2].set_title(f"{short} weights (above 0 = long, below 0 = short)")
-    ax[2].legend(ncol=8, fontsize=6, loc="upper left")
+    if weights.shape[1] <= 40:
+        ax[2].legend(ncol=8, fontsize=6, loc="upper left")
     plt.tight_layout(); plt.savefig(out / "backtest.png", dpi=130); plt.close(fig)
 
     print(f"\n===== {config.MODEL_INFO[mid]['name']} =====")
@@ -140,8 +154,9 @@ if __name__ == "__main__":
     pd.set_option("display.float_format", lambda x: f"{x:,.3f}")
 
     ids = list(REGISTRY) if args.model == "all" else [args.model]
-    tickers = sorted({t for m in ids for t in REGISTRY[m][1]["universe"]} | set(bt["benchmark"]))
-    prices, rf = load_inputs(tickers, args.synthetic)
+    extra = {e for m in ids for e in REGISTRY[m][1].get("compare_etfs", [])}
+    tickers = sorted({t for m in ids for t in REGISTRY[m][1]["universe"]} | set(bt["benchmark"]) | extra)
+    prices, rf = load_inputs(tickers, args.synthetic, required=set(bt["benchmark"]) | required_tickers(ids))
     print(f"Data: {prices.index[0].date()} to {prices.index[-1].date()}, {len(prices.columns)} assets")
     results = {m: run_model(m, prices, rf, args.synthetic) for m in ids}
     if args.model == "all" and len(config.SLEEVES) > 1 and all(m in results for m in config.SLEEVES):
