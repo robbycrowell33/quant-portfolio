@@ -29,12 +29,15 @@ from models import REGISTRY as MODELS
 LIVE_DIR = Path("live")
 
 
-def sleeve_due(name, asof, prev_state, force):
+PAPER = [m for m, info in config.MODEL_INFO.items() if info.get("kind") == "signal" and m in MODELS]
+
+
+def sleeve_due(name, asof, prev_state, force, key="sleeve_asof"):
     """Weekly sleeves rebalance every rebalance day. Monthly sleeves only on the
     first rebalance day of each month (same rule as the backtest)."""
     if force or MODELS[name][1].get("rebalance", "weekly") != "monthly":
         return True
-    last = (prev_state or {}).get("sleeve_asof", {}).get(name)
+    last = (prev_state or {}).get(key, {}).get(name)
     return last is None or pd.Timestamp(last).to_period("M") != asof.to_period("M")
 
 
@@ -61,6 +64,24 @@ def combined_targets(prices, asof, cur_w, prev_state, prev_signals, force=False)
         total *= config.LIVE["max_gross"] / gross
         print(f"  combined gross {gross:.2f} > cap {config.LIVE['max_gross']}, scaled down")
     return total, per_sleeve, details, sleeve_asof
+
+
+def paper_targets(prices, asof, prev_state, prev_signals, force=False):
+    """Paper-only models: same schedule as if live, but weights are only logged.
+    Never touches the account. Weights are at standalone scale (100% of capital)."""
+    weights, details, paper_asof = {}, {}, {}
+    for name in PAPER:
+        fn, cfg = MODELS[name]
+        if sleeve_due(name, asof, prev_state, force, key="paper_asof"):
+            w, det = fn(prices[cfg["universe"]], cfg)
+            weights[name] = w.to_dict()
+            details[name] = det.reset_index(names="ticker").to_dict(orient="records")
+            paper_asof[name] = str(asof.date())
+        else:
+            weights[name] = prev_state["paper_weights"][name]
+            details[name] = prev_signals.get("paper", {}).get(name, [])
+            paper_asof[name] = prev_state["paper_asof"][name]
+    return weights, details, paper_asof
 
 
 def to_shares(weights, equity, last_px):
@@ -101,7 +122,7 @@ def main():
     ap.add_argument("--asof", help="(test mode) pretend today is this date")
     args = ap.parse_args()
 
-    universe = sorted({t for n in config.SLEEVES for t in MODELS[n][1]["universe"]})
+    universe = sorted({t for n in [*config.SLEEVES, *PAPER] for t in MODELS[n][1]["universe"]})
     signals_path_name = "signals_latest.json"
     if args.test:
         prices = data.synthetic_prices(universe)
@@ -135,6 +156,7 @@ def main():
                           dtype=float)
         weights, per_sleeve, details, sleeve_asof = combined_targets(
             prices, asof, cur_w, prev_state, prev_signals, force=args.force)
+        paper_w, paper_det, paper_asof = paper_targets(prices, asof, prev_state, prev_signals, force=args.force)
         # v1.1 no-trade band (same rule as the backtest): positions that are close
         # enough to target keep their current share count.
         banded = apply_band(weights, cur_w, *config.LIVE["band"])
@@ -145,11 +167,15 @@ def main():
             print(f"  within no-trade band, holding: {', '.join(sorted(kept))}")
         state = {"asof": str(asof.date()), "equity_at_rebalance": acct["equity"],
                  "weights": weights.to_dict(), "sleeves": per_sleeve, "sleeve_asof": sleeve_asof,
-                 "shares": target_shares}
+                 "shares": target_shares, "paper_weights": paper_w, "paper_asof": paper_asof}
         if not args.dry_run:
             state_path.write_text(json.dumps(state, indent=2))
             (live_dir / signals_path_name).write_text(json.dumps(
-                {"asof": str(asof.date()), "sleeve_asof": sleeve_asof, "sleeves": details}, indent=2, default=float))
+                {"asof": str(asof.date()), "sleeve_asof": sleeve_asof, "sleeves": details,
+                 "paper_asof": paper_asof, "paper": paper_det}, indent=2, default=float))
+            (live_dir / "paper").mkdir(exist_ok=True)
+            for name, w in paper_w.items():
+                append_csv(live_dir / "paper" / f"{name}_weights.csv", {"date": str(asof.date()), **w})
             for name, w in per_sleeve.items():   # logged at standalone scale (100% of capital)
                 alloc = config.SLEEVES[name]
                 append_csv(live_dir / f"sleeve_weights_{name}.csv",
@@ -157,6 +183,8 @@ def main():
         else:
             for name in per_sleeve:
                 print(f"  {name}: {'new targets' if sleeve_asof[name] == str(asof.date()) else 'holding (not due)'}")
+            for name in paper_w:
+                print(f"  {name} (paper only, no orders): {'new signals' if paper_asof[name] == str(asof.date()) else 'not due'}")
     else:
         state = json.loads(state_path.read_text())
         target_shares = state["shares"]

@@ -144,6 +144,6 @@ if __name__ == "__main__":
     prices, rf = load_inputs(tickers, args.synthetic)
     print(f"Data: {prices.index[0].date()} to {prices.index[-1].date()}, {len(prices.columns)} assets")
     results = {m: run_model(m, prices, rf, args.synthetic) for m in ids}
-    if args.model == "all" and all(m in results for m in config.SLEEVES):
+    if args.model == "all" and len(config.SLEEVES) > 1 and all(m in results for m in config.SLEEVES):
         # rerun correlations now that every sleeve's file exists is unnecessary: portfolio covers it
         run_portfolio({m: results[m] for m in config.SLEEVES}, prices, rf, args.synthetic)

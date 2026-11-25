@@ -3,9 +3,10 @@
 # ---- Sleeves: which models run live, and what share of account equity each gets.
 # Add new models here as they come online (weights should sum to <= 1.0).
 SLEEVES = {
-    "tsmom": 0.60,
-    "xsmom": 0.40,
+    "tsmom": 1.0,
 }
+# Paper-only models are every model in MODEL_INFO with kind "signal": they run on
+# their normal schedule and get tracked, but never receive capital or send orders.
 
 # ---- Model registry: everything the dashboard shows about each model.
 # kind:   "sleeve" = trades real (paper) capital in the Alpaca account
@@ -20,7 +21,6 @@ MODEL_INFO = {
         "kind": "sleeve",
         "status": "live",
         "started": "2026-11-25",
-        "allocation_note": "100% until Nov 27, 2026, then 60%",
         "summary": "Long/short trend following across 10 cross-asset ETFs, sized to 10% annualized volatility.",
         "version": "v1.1",
         "how_it_works": [
@@ -41,8 +41,9 @@ MODEL_INFO = {
 MODEL_INFO["xsmom"] = {
     "name": "Cross-Sectional Momentum",
     "short": "XSMOM",
-    "kind": "sleeve",
-    "status": "live",
+    "kind": "signal",
+    "status": "paper",
+    "paper_reason": "Backtest Sharpe 0.08 vs T-bills (2006-2026) and it lowered the combined portfolio's Sharpe, so it gets no capital. Tracked on paper to see if it earns a spot.",
     "version": "v1",
     "started": "2026-11-27",
     "summary": "Long the 5 strongest and short the 5 weakest of 25 US sector and industry ETFs, ranked on 12-month momentum.",
@@ -57,7 +58,7 @@ MODEL_INFO["xsmom"] = {
         "It bets on relative strength: winners vs losers, not the market's direction, so it's roughly market-neutral.",
         "Expect it to do well when leadership is persistent (e.g. tech or energy runs) and struggle when leadership rotates fast.",
         "Known risk: momentum crashes. When beaten-down sectors snap back hard (spring 2009), the short leg gets squeezed.",
-        "Pairs with TSMOM: TSMOM bets on asset-class direction, this bets on sector spreads.",
+        "Hedge test: did well in COVID 2020 (+8% while TSMOM lost 22%) but lost alongside TSMOM in 2011, 2015-16 and 2018.",
     ],
 }
 

@@ -93,7 +93,8 @@ def main():
     if eq_df is not None and not eq_df.empty:
         eq_df = eq_df.drop_duplicates("date", keep="last").set_index("date").sort_index()
         start = eq_df.index[0]
-        tickers = sorted(set(bench_mix) | {t for m in config.SLEEVES for t in REGISTRY[m][1]["universe"]})
+        tracked = [m for m in config.MODEL_INFO if m in REGISTRY and (m in config.SLEEVES or config.MODEL_INFO[m].get("kind") == "signal")]
+        tickers = sorted(set(bench_mix) | {t for m in tracked for t in REGISTRY[m][1]["universe"]})
         if args.test:
             prices = data.synthetic_prices(tickers).loc[start - pd.Timedelta(days=10):eq_df.index[-1]]
         else:
@@ -116,7 +117,7 @@ def main():
         }
 
     pos = json.loads((live_dir / "positions_latest.json").read_text()) if (live_dir / "positions_latest.json").exists() else {"positions": []}
-    owner = {t: config.MODEL_INFO[m]["short"] for m in REGISTRY for t in REGISTRY[m][1]["universe"]}
+    owner = {t: config.MODEL_INFO[m]["short"] for m in config.SLEEVES for t in REGISTRY[m][1]["universe"]}
     for p in pos["positions"]:
         p["asset_class"] = config.ASSET_CLASS.get(p["ticker"], "Other")
         p["sleeve"] = owner.get(p["ticker"], "–")
@@ -128,16 +129,20 @@ def main():
     models = []
     for mid, info in config.MODEL_INFO.items():
         m = {"id": mid, **info, "allocation": config.SLEEVES.get(mid, 0.0)}
-        if prices is not None and m["allocation"] > 0:
-            shadow = sleeve_shadow(live_dir / f"sleeve_weights_{mid}.csv", prices)
+        paper = info.get("kind") == "signal"
+        m["paper"] = paper
+        wfile = live_dir / "paper" / f"{mid}_weights.csv" if paper else live_dir / f"sleeve_weights_{mid}.csv"
+        if prices is not None and (paper or m["allocation"] > 0):
+            shadow = sleeve_shadow(wfile, prices)
             if shadow is not None:
                 bench_m = (prices[list(bench_mix)].pct_change().mul(pd.Series(bench_mix)).sum(axis=1)
                            .loc[shadow.index[0]:])
                 bench_m = (1 + bench_m.iloc[1:]).cumprod().reindex(bench_m.index).fillna(1.0)
                 m["live"] = {"curve": series(shadow), "bench": series(bench_m),
                              "stats": live_stats(shadow, bench_m)}
-        m["signals"] = sig["sleeves"].get(mid, [])
-        m["signals_asof"] = sig.get("sleeve_asof", {}).get(mid, sig.get("asof"))
+        src, asof_key = ("paper", "paper_asof") if paper else ("sleeves", "sleeve_asof")
+        m["signals"] = sig.get(src, {}).get(mid, [])
+        m["signals_asof"] = sig.get(asof_key, {}).get(mid, sig.get("asof") if not paper else None)
         m["rebalance"] = REGISTRY[mid][1].get("rebalance", "weekly")
 
         bt_dir = ROOT / "backtests" / f"{mid}{bt_suffix}"
@@ -163,7 +168,7 @@ def main():
     # ---------- combined portfolio backtest ----------
     portfolio_bt = None
     pdir = ROOT / "backtests" / f"portfolio{bt_suffix}"
-    if (pdir / "equity.csv").exists():
+    if len(config.SLEEVES) > 1 and (pdir / "equity.csv").exists():
         pe = pd.read_csv(pdir / "equity.csv", index_col=0, parse_dates=True).resample("W-FRI").last()
         ps = json.loads((pdir / "summary.json").read_text())
         names = {m: config.MODEL_INFO[m]["short"] for m in ps["allocation"]}
