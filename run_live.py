@@ -93,10 +93,9 @@ def main():
 
     asof = prices.index[-1]
     last_px = prices.iloc[-1]
-    eq_log = live_dir / "equity.csv"
-    if not args.force and eq_log.exists() and str(asof.date()) in eq_log.read_text():
-        print(f"{asof.date()} already processed (market holiday?). Nothing to do.")
-        return
+    # Re-running on the same date (holiday, manual rerun) is safe: no new targets
+    # unless it's rebalance day, orders only fill gaps vs the saved targets, and the
+    # snapshot for that date gets replaced rather than duplicated.
     acct = brk.account()
     current = brk.positions()
     is_reb_day = args.force or asof.weekday() == config.LIVE["rebalance_weekday"] or not state_path.exists()
@@ -130,7 +129,12 @@ def main():
 
     if not args.dry_run:
         acct = brk.account()   # (fake broker fills instantly; Alpaca orders fill next open)
-        append_csv(live_dir / "equity.csv", {"date": str(asof.date()), **acct})
+        eq_path = live_dir / "equity.csv"
+        row = pd.DataFrame([{"date": str(asof.date()), **acct}])
+        if eq_path.exists():
+            old = pd.read_csv(eq_path, dtype={"date": str})
+            row = pd.concat([old[old["date"] != str(asof.date())], row])
+        row.to_csv(eq_path, index=False)
         pos = brk.positions()
         (live_dir / "positions_latest.json").write_text(json.dumps({
             "asof": str(asof.date()),
