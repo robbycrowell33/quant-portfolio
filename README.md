@@ -6,7 +6,8 @@ combines sleeve targets into one book.
 
 | Sleeve | Model | Status |
 |---|---|---|
-| `tsmom` | Time-series momentum, long/short, 10 cross-asset ETFs, 10% vol target | live |
+| `tsmom` | Time-series momentum, long/short, 10 cross-asset ETFs, weekly, 60% of capital | live |
+| `xsmom` | Cross-sectional momentum, long/short top/bottom 5 of 25 sector & industry ETFs, monthly, 40% | live |
 
 ## TSMOM in one paragraph
 Each Friday, every ETF gets a trend score: the average sign of its 3, 6 and 12 month
@@ -19,7 +20,8 @@ volatility using the covariance matrix, with caps of 40% per position and 2x gro
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-python run_backtest.py            # real backtest, outputs in backtests/tsmom/
+python run_backtest.py all        # every model + combined portfolio, outputs in backtests/
+python run_backtest.py xsmom      # just one model
 python run_live.py --test         # offline smoke test (fake data + fake broker)
 
 export ALPACA_API_KEY=...         # PAPER keys from alpaca.markets

@@ -24,21 +24,43 @@ import pandas as pd
 import config
 from core import broker as brokers, data
 from core.portfolio import apply_band
-from models import tsmom
+from models import REGISTRY as MODELS
 
-MODELS = {"tsmom": (tsmom.target_weights, config.TSMOM)}
 LIVE_DIR = Path("live")
 
 
-def combined_targets(prices):
-    total, per_sleeve, details = pd.Series(dtype=float), {}, {}
+def sleeve_due(name, asof, prev_state, force):
+    """Weekly sleeves rebalance every rebalance day. Monthly sleeves only on the
+    first rebalance day of each month (same rule as the backtest)."""
+    if force or MODELS[name][1].get("rebalance", "weekly") != "monthly":
+        return True
+    last = (prev_state or {}).get("sleeve_asof", {}).get(name)
+    return last is None or pd.Timestamp(last).to_period("M") != asof.to_period("M")
+
+
+def combined_targets(prices, asof, cur_w, prev_state, prev_signals, force=False):
+    """Sum every sleeve's weights scaled by its capital share. A sleeve that isn't due
+    keeps its current holdings (they drift, like in the backtest). Sleeves never share
+    tickers, so a sleeve's current holdings are just the account's positions in its universe."""
+    total, per_sleeve, details, sleeve_asof = pd.Series(dtype=float), {}, {}, {}
     for name, alloc in config.SLEEVES.items():
         fn, cfg = MODELS[name]
-        w, det = fn(prices[cfg["universe"]], cfg)
-        per_sleeve[name] = (w * alloc).to_dict()
-        details[name] = det.reset_index(names="ticker").to_dict(orient="records")
-        total = total.add(w * alloc, fill_value=0.0)
-    return total, per_sleeve, details
+        if sleeve_due(name, asof, prev_state, force):
+            w, det = fn(prices[cfg["universe"]], cfg)
+            w = w * alloc
+            details[name] = det.reset_index(names="ticker").to_dict(orient="records")
+            sleeve_asof[name] = str(asof.date())
+        else:
+            w = cur_w.reindex(cfg["universe"]).fillna(0.0)
+            details[name] = prev_signals.get("sleeves", {}).get(name, [])
+            sleeve_asof[name] = prev_state["sleeve_asof"][name]
+        per_sleeve[name] = w.to_dict()
+        total = total.add(w, fill_value=0.0)
+    gross = total.abs().sum()
+    if gross > config.LIVE["max_gross"]:          # account-level leverage cap
+        total *= config.LIVE["max_gross"] / gross
+        print(f"  combined gross {gross:.2f} > cap {config.LIVE['max_gross']}, scaled down")
+    return total, per_sleeve, details, sleeve_asof
 
 
 def to_shares(weights, equity, last_px):
@@ -64,8 +86,11 @@ def plan_orders(target, current, last_px, equity, min_w):
 
 
 def append_csv(path, row: dict):
+    """Append a row; tolerant of new columns appearing later."""
     df = pd.DataFrame([row])
-    df.to_csv(path, mode="a", header=not path.exists(), index=False)
+    if path.exists():
+        df = pd.concat([pd.read_csv(path), df], ignore_index=True)
+    df.to_csv(path, index=False)
 
 
 def main():
@@ -77,6 +102,7 @@ def main():
     args = ap.parse_args()
 
     universe = sorted({t for n in config.SLEEVES for t in MODELS[n][1]["universe"]})
+    signals_path_name = "signals_latest.json"
     if args.test:
         prices = data.synthetic_prices(universe)
         if args.asof:
@@ -102,10 +128,15 @@ def main():
     is_reb_day = args.force or asof.weekday() == config.LIVE["rebalance_weekday"] or not state_path.exists()
 
     if is_reb_day:
-        weights, per_sleeve, details = combined_targets(prices)
+        prev_state = json.loads(state_path.read_text()) if state_path.exists() else None
+        sig_path = live_dir / signals_path_name
+        prev_signals = json.loads(sig_path.read_text()) if sig_path.exists() else {}
+        cur_w = pd.Series({t: q * last_px[t] / acct["equity"] for t, q in current.items() if t in last_px},
+                          dtype=float)
+        weights, per_sleeve, details, sleeve_asof = combined_targets(
+            prices, asof, cur_w, prev_state, prev_signals, force=args.force)
         # v1.1 no-trade band (same rule as the backtest): positions that are close
         # enough to target keep their current share count.
-        cur_w = pd.Series({t: q * last_px[t] / acct["equity"] for t, q in current.items() if t in last_px})
         banded = apply_band(weights, cur_w, *config.LIVE["band"])
         kept = [t for t in banded.index if t in current and banded[t] == cur_w.get(t)]
         target_shares = to_shares(banded.drop(kept), acct["equity"], last_px)
@@ -113,13 +144,19 @@ def main():
         if kept:
             print(f"  within no-trade band, holding: {', '.join(sorted(kept))}")
         state = {"asof": str(asof.date()), "equity_at_rebalance": acct["equity"],
-                 "weights": weights.to_dict(), "sleeves": per_sleeve, "shares": target_shares}
+                 "weights": weights.to_dict(), "sleeves": per_sleeve, "sleeve_asof": sleeve_asof,
+                 "shares": target_shares}
         if not args.dry_run:
             state_path.write_text(json.dumps(state, indent=2))
-        (live_dir / "signals_latest.json").write_text(json.dumps(
-            {"asof": str(asof.date()), "sleeves": details}, indent=2, default=float))
-        for name, w in per_sleeve.items():
-            append_csv(live_dir / f"sleeve_weights_{name}.csv", {"date": str(asof.date()), **w})
+            (live_dir / signals_path_name).write_text(json.dumps(
+                {"asof": str(asof.date()), "sleeve_asof": sleeve_asof, "sleeves": details}, indent=2, default=float))
+            for name, w in per_sleeve.items():   # logged at standalone scale (100% of capital)
+                alloc = config.SLEEVES[name]
+                append_csv(live_dir / f"sleeve_weights_{name}.csv",
+                           {"date": str(asof.date()), **{t: v / alloc for t, v in w.items()}})
+        else:
+            for name in per_sleeve:
+                print(f"  {name}: {'new targets' if sleeve_asof[name] == str(asof.date()) else 'holding (not due)'}")
     else:
         state = json.loads(state_path.read_text())
         target_shares = state["shares"]

@@ -9,7 +9,7 @@
   color-scheme: light;
   --page: #f9f9f9; --surface: #ffffff; --ink: #191919; --ink-2: #666666;
   --grid: #e7e7e7; --axis: #c2c2c2; --border: rgba(11,11,11,0.10);
-  --s1: #257de0; --s2: #f47230; --s3: #00b894;
+  --s1: #257de0; --s2: #f47230; --s3: #00b894; --s4: #f2a600;
   --long: #257de0; --short: #ec4647; --neutral: #efefef;
   --up: #006c10; --down: #dc3c3d;
   --chip: #f1f1f1; --hover: rgba(11,11,11,0.04);
@@ -19,7 +19,7 @@
     color-scheme: dark;
     --page: #0b0b0b; --surface: #191919; --ink: #efefef; --ink-2: #9c9c9c;
     --grid: #303030; --axis: #474747; --border: rgba(255,255,255,0.10);
-    --s1: #338ced; --s2: #e76624; --s3: #00a888;
+    --s1: #338ced; --s2: #e76624; --s3: #00a888; --s4: #d28e05;
     --long: #338ced; --short: #eb6263; --neutral: #383838;
     --up: #53c556; --down: #eb6263; --chip: #262626; --hover: rgba(255,255,255,0.05);
   }
@@ -28,7 +28,7 @@
   color-scheme: dark;
   --page: #0b0b0b; --surface: #191919; --ink: #efefef; --ink-2: #9c9c9c;
   --grid: #303030; --axis: #474747; --border: rgba(255,255,255,0.10);
-  --s1: #338ced; --s2: #e76624; --s3: #00a888;
+  --s1: #338ced; --s2: #e76624; --s3: #00a888; --s4: #d28e05;
   --long: #338ced; --short: #eb6263; --neutral: #383838;
   --up: #53c556; --down: #eb6263; --chip: #262626; --hover: rgba(255,255,255,0.05);
 }
@@ -182,7 +182,8 @@ function lineChart(series, {height = 280, log = false, fmt = v => num(v), zero =
     // y grid + ticks
     let ticks;
     if (log) {
-      ticks = []; const cands = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 5, 7, 10, 15, 20];
+      ticks = []; const wide = Math.exp(yhi - ylo) > 6;
+      const cands = wide ? [0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64] : [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
       for (const c of cands) if (c >= Math.exp(ylo) && c <= Math.exp(yhi)) ticks.push(c);
       if (ticks.length < 2) ticks = [lo, hi];
     } else {
@@ -329,11 +330,35 @@ function overview(app) {
       {h: "Model", f: m => $("a", {href: "#/model/" + m.id}, m.name)},
       {h: "Type", f: m => $("span", {class: "chip"}, m.kind === "sleeve" ? "Sleeve" : "Signal")},
       {h: "Status", f: m => $("span", {class: "chip"}, m.status)},
+      {h: "Rebalance", f: m => m.rebalance === "monthly" ? "Monthly" : "Weekly"},
       {h: "Allocation", n: true, f: m => m.kind === "sleeve" ? pct(m.allocation, 0) : "–"},
       {h: "Live return", n: true, f: m => pct(m.live?.stats?.["Total return"], 2, true), cls: m => tone(m.live?.stats?.["Total return"])},
       {h: "Backtest Sharpe", n: true, f: m => num(Object.values(m.backtest?.stats || {})[0]?.Sharpe)},
       {h: "Backtest max DD", n: true, f: m => pct(Object.values(m.backtest?.stats || {})[0]?.["Max drawdown"], 1)},
     ], models)));
+
+  const PB = D.portfolio_bt;
+  if (PB) {
+    const sl = Object.keys(PB.allocation);
+    const colors = ["--s3", "--s4"];
+    const split = sl.map(k => k + " " + pct(PB.allocation[k], 0)).join(" / ");
+    app.append(card("Backtest: the sleeves combined", "Today's split (" + split + "), rebalanced daily, vs 60/40" + (PB.synthetic ? " (synthetic data)" : "") + ". Log scale.",
+      lineChart([{name: "Portfolio", color: "--s1", data: PB.curves.Portfolio}, {name: "60/40", color: "--s2", data: PB.curves["60/40"]},
+        ...sl.map((k, i) => ({name: k, color: colors[i % 2], data: PB.curves[k]}))], {log: true, fmt: v => "$" + v.toFixed(2), height: 300})));
+    const cols = ["Portfolio", ...sl, "60/40"];
+    const rowsK = ["CAGR", "Volatility", "Sharpe", "Max drawdown", "Calmar", "Worst year"];
+    const isP = k => /CAGR|Volatility|drawdown|year/.test(k);
+    const corrRows = sl.map(a => ({a}));
+    app.append($("div", {class: "grid2"},
+      card("Combined vs parts", "Sharpe is measured against T-bills. Combining low-correlation sleeves is what lifts the portfolio above its parts.", table([
+        {h: "", f: r => r.k},
+        ...cols.map(c => ({h: c, n: true, f: r => { const v = PB.stats[c]?.[r.k]; return !isNum(v) ? "–" : isP(r.k) ? pct(v, 1) : num(v, 2); }})),
+      ], rowsK.map(k => ({k})))),
+      card("Sleeve correlation", "Daily returns over the full backtest. Near 0 = the sleeves diversify each other.", table([
+        {h: "", f: r => $("b", {}, r.a)},
+        ...sl.map(b => ({h: b, n: true, f: r => num(PB.correlation[r.a]?.[b], 2)})),
+      ], corrRows))));
+  }
 
   const P = [...D.positions].sort((a, b) => b.weight - a.weight);
   const posGrid = $("div", {class: "grid2"});
@@ -342,6 +367,7 @@ function overview(app) {
   posGrid.append(card("Holdings", "As of " + (D.asof ? fmtDate(D.asof) : "–"),
     table([
       {h: "Ticker", f: p => $("b", {}, p.ticker)},
+      {h: "Sleeve", f: p => $("span", {class: "chip"}, p.sleeve)},
       {h: "Class", f: p => p.asset_class},
       {h: "Side", f: p => $("span", {class: "dir"}, $("i", {style: `background:var(${p.qty > 0 ? "--long" : "--short"})`}), p.qty > 0 ? "Long" : "Short")},
       {h: "Shares", n: true, f: p => p.qty},
@@ -400,17 +426,28 @@ function modelPage(app, m) {
   app.append(liveCard);
 
   // signals
-  if (m.signals && m.signals.length) {
+  if (m.signals && m.signals.length && m.signals[0].rank !== undefined) {
+    const rows = [...m.signals].sort((a, b) => a.rank - b.rank);
+    app.append(card("Current signals", "Ranking" + (m.signals_asof ? " as of " + fmtDate(m.signals_asof) : "") + ". " + (m.signals_note || ""),
+      table([
+        {h: "Rank", n: true, f: r => r.rank},
+        {h: "Ticker", f: r => $("b", {}, r.ticker)},
+        {h: "12-1 return", n: true, f: r => pct(r.ret_12_1, 1, true), cls: r => tone(r.ret_12_1)},
+        {h: "Volatility", n: true, f: r => pct(r.vol_ann, 1)},
+        {h: "Weight in sleeve", n: true, f: r => Math.abs(r.weight) < 1e-4 ? "–" : pct(r.weight, 1, true)},
+        {h: "Position", f: r => r.leg === "-" ? $("span", {style: "color:var(--ink-2)"}, "Flat") : $("span", {class: "dir"}, $("i", {style: `background:var(${r.leg === "long" ? "--long" : "--short"})`}), r.leg === "long" ? "Long" : "Short")},
+      ], rows)));
+  } else if (m.signals && m.signals.length) {
     const lbs = Object.keys(m.signals[0]).filter(k => k.startsWith("ret_")).sort((a, b) => parseInt(a.slice(4)) - parseInt(b.slice(4)));
     const lbName = k => ({63: "3m", 126: "6m", 252: "12m"}[parseInt(k.slice(4))] || k.slice(4));
     const rows = [...m.signals].sort((a, b) => b.weight - a.weight);
-    app.append(card("Current signals", "What the model sees right now" + (m.signals_asof ? ", as of " + fmtDate(m.signals_asof) : "") + ". Trend score is the average of the signs: +1 = up on every lookback, -1 = down on every lookback.",
+    app.append(card("Current signals", "What the model sees right now" + (m.signals_asof ? ", as of " + fmtDate(m.signals_asof) : "") + ". " + (m.signals_note || ""),
       table([
         {h: "Ticker", f: r => $("b", {}, r.ticker)},
         ...lbs.map(k => ({h: lbName(k) + " return", n: true, f: r => pct(r[k], 1, true), cls: r => tone(r[k])})),
         {h: "Trend score", n: true, f: r => (r.strength > 0 ? "+" : "") + num(r.strength, 2)},
         {h: "Volatility", n: true, f: r => pct(r.vol_ann, 1)},
-        {h: "Target weight", n: true, f: r => pct(r.weight, 1, true)},
+        {h: "Weight in sleeve", n: true, f: r => pct(r.weight, 1, true)},
         {h: "Position", f: r => $("span", {class: "dir"}, $("i", {style: `background:var(${r.weight >= 0 ? "--long" : "--short"})`}), Math.abs(r.weight) < 1e-4 ? "Flat" : r.weight > 0 ? "Long" : "Short")},
       ], rows)));
   }

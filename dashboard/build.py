@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import config  # noqa: E402
 from core import data, metrics  # noqa: E402
+from models import REGISTRY  # noqa: E402
 
 
 def series(s: pd.Series, digits=5):
@@ -60,13 +61,13 @@ def live_stats(eq: pd.Series, bench: pd.Series = None):
     return out
 
 
-def sleeve_shadow(weights_csv: Path, prices: pd.DataFrame, alloc: float):
-    """Rebuild a sleeve's own P&L from its logged target weights and daily prices.
-    Weights are held from each rebalance until the next (drift ignored)."""
+def sleeve_shadow(weights_csv: Path, prices: pd.DataFrame):
+    """Rebuild a sleeve's own P&L from its logged weights (standalone scale) and daily
+    prices. Weights are held from each rebalance until the next (drift ignored)."""
     w = read_csv(weights_csv, parse_dates=["date"])
     if w is None or w.empty:
         return None
-    w = w.set_index("date").sort_index().fillna(0.0) / alloc
+    w = w.drop_duplicates("date", keep="last").set_index("date").sort_index().fillna(0.0)
     cols = [c for c in w.columns if c in prices.columns]
     rets = prices[cols].pct_change()
     held = w[cols].reindex(rets.index).ffill().shift(1)       # earn the day after deciding
@@ -92,7 +93,7 @@ def main():
     if eq_df is not None and not eq_df.empty:
         eq_df = eq_df.drop_duplicates("date", keep="last").set_index("date").sort_index()
         start = eq_df.index[0]
-        tickers = sorted(set(bench_mix) | {t for m in config.SLEEVES for t in config.TSMOM["universe"]})
+        tickers = sorted(set(bench_mix) | {t for m in config.SLEEVES for t in REGISTRY[m][1]["universe"]})
         if args.test:
             prices = data.synthetic_prices(tickers).loc[start - pd.Timedelta(days=10):eq_df.index[-1]]
         else:
@@ -115,8 +116,10 @@ def main():
         }
 
     pos = json.loads((live_dir / "positions_latest.json").read_text()) if (live_dir / "positions_latest.json").exists() else {"positions": []}
+    owner = {t: config.MODEL_INFO[m]["short"] for m in REGISTRY for t in REGISTRY[m][1]["universe"]}
     for p in pos["positions"]:
         p["asset_class"] = config.ASSET_CLASS.get(p["ticker"], "Other")
+        p["sleeve"] = owner.get(p["ticker"], "–")
     sig = json.loads((live_dir / "signals_latest.json").read_text()) if (live_dir / "signals_latest.json").exists() else {"sleeves": {}}
     trades = read_csv(live_dir / "trades.csv")
     trades = [] if trades is None else trades.tail(200).iloc[::-1].drop(columns=["order_id"], errors="ignore").to_dict(orient="records")
@@ -126,7 +129,7 @@ def main():
     for mid, info in config.MODEL_INFO.items():
         m = {"id": mid, **info, "allocation": config.SLEEVES.get(mid, 0.0)}
         if prices is not None and m["allocation"] > 0:
-            shadow = sleeve_shadow(live_dir / f"sleeve_weights_{mid}.csv", prices, m["allocation"])
+            shadow = sleeve_shadow(live_dir / f"sleeve_weights_{mid}.csv", prices)
             if shadow is not None:
                 bench_m = (prices[list(bench_mix)].pct_change().mul(pd.Series(bench_mix)).sum(axis=1)
                            .loc[shadow.index[0]:])
@@ -134,7 +137,8 @@ def main():
                 m["live"] = {"curve": series(shadow), "bench": series(bench_m),
                              "stats": live_stats(shadow, bench_m)}
         m["signals"] = sig["sleeves"].get(mid, [])
-        m["signals_asof"] = sig.get("asof")
+        m["signals_asof"] = sig.get("sleeve_asof", {}).get(mid, sig.get("asof"))
+        m["rebalance"] = REGISTRY[mid][1].get("rebalance", "weekly")
 
         bt_dir = ROOT / "backtests" / f"{mid}{bt_suffix}"
         if (bt_dir / "equity.csv").exists():
@@ -156,6 +160,23 @@ def main():
             }
         models.append(m)
 
+    # ---------- combined portfolio backtest ----------
+    portfolio_bt = None
+    pdir = ROOT / "backtests" / f"portfolio{bt_suffix}"
+    if (pdir / "equity.csv").exists():
+        pe = pd.read_csv(pdir / "equity.csv", index_col=0, parse_dates=True).resample("W-FRI").last()
+        ps = json.loads((pdir / "summary.json").read_text())
+        names = {m: config.MODEL_INFO[m]["short"] for m in ps["allocation"]}
+        portfolio_bt = {
+            "allocation": {names[m]: w for m, w in ps["allocation"].items()},
+            "curves": {"Portfolio": series(pe["portfolio"], 4), "60/40": series(pe["bench_6040"], 4),
+                       **{names[m]: series(pe[m], 4) for m in ps["allocation"]}},
+            "stats": ps["stats"],
+            "correlation": {names[a]: {names[b]: v for b, v in row.items()} for a, row in ps["correlation"].items()},
+            "crisis": ps["crisis"],
+            "synthetic": ps.get("synthetic", False),
+        }
+
     payload = clean({
         "generated_utc": datetime.now(timezone.utc).isoformat(timespec="minutes"),
         "asof": pos.get("asof") or (account["curve"][-1][0] if account else None),
@@ -164,6 +185,7 @@ def main():
         "positions": pos["positions"],
         "trades": trades,
         "models": models,
+        "portfolio_bt": portfolio_bt,
     })
     template = (ROOT / "dashboard" / "template.html").read_text()
     html = template.replace("/*__DATA__*/null", json.dumps(payload, default=str))
