@@ -23,6 +23,7 @@ import pandas as pd
 
 import config
 from core import broker as brokers, data
+from core.portfolio import apply_band
 from models import tsmom
 
 MODELS = {"tsmom": (tsmom.target_weights, config.TSMOM)}
@@ -102,7 +103,15 @@ def main():
 
     if is_reb_day:
         weights, per_sleeve, details = combined_targets(prices)
-        target_shares = to_shares(weights, acct["equity"], last_px)
+        # v1.1 no-trade band (same rule as the backtest): positions that are close
+        # enough to target keep their current share count.
+        cur_w = pd.Series({t: q * last_px[t] / acct["equity"] for t, q in current.items() if t in last_px})
+        banded = apply_band(weights, cur_w, *config.LIVE["band"])
+        kept = [t for t in banded.index if t in current and banded[t] == cur_w.get(t)]
+        target_shares = to_shares(banded.drop(kept), acct["equity"], last_px)
+        target_shares.update({t: current[t] for t in kept})
+        if kept:
+            print(f"  within no-trade band, holding: {', '.join(sorted(kept))}")
         state = {"asof": str(asof.date()), "equity_at_rebalance": acct["equity"],
                  "weights": weights.to_dict(), "sleeves": per_sleeve, "shares": target_shares}
         if not args.dry_run:

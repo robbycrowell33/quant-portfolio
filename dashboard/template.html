@@ -433,9 +433,9 @@ function modelPage(app, m) {
 
     const names = Object.keys(B.stats);
     const keys = Object.keys(B.stats[names[0]]);
-    const isPct = k => /CAGR|Volatility|drawdown|months|year|turnover/i.test(k) && !/turnover/i.test(k);
+    const isPct = k => /CAGR|Volatility|drawdown|months|year|cost/i.test(k);
     app.append($("div", {class: "grid2"},
-      card("Backtest statistics", "Full-period figures.", table([
+      card("Backtest statistics", "Full-period figures. Sharpe and Sortino are measured against T-bills." + (names.includes(names[0] + " v1") ? " The v1 column is the original version, kept for comparison." : ""), table([
         {h: "", f: r => r.k},
         ...names.map(n => ({h: n, n: true, f: r => { const v = B.stats[n][r.k]; return !isNum(v) ? "–" : isPct(r.k) ? pct(v, 1) : num(v, 2); }})),
       ], keys.map(k => ({k})))),

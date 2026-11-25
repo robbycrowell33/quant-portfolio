@@ -18,18 +18,21 @@ def drawdown(equity: pd.Series) -> pd.Series:
     return equity / equity.cummax() - 1
 
 
-def summary(equity: pd.Series, bench: pd.Series = None) -> dict:
+def summary(equity: pd.Series, bench: pd.Series = None, rf: pd.Series = None) -> dict:
+    """rf: daily Series of annualized T-bill rates. If given, Sharpe/Sortino use
+    returns in excess of T-bills (the standard definition)."""
     r = equity.pct_change().dropna()
     years = len(r) / TD
     cagr = equity.iloc[-1] ** (1 / years) - 1 if years > 0 else np.nan
     vol = r.std() * np.sqrt(TD)
-    downside = r[r < 0].std() * np.sqrt(TD)
+    ex = r - (rf.reindex(r.index).ffill().fillna(0.0) / TD if rf is not None else 0.0)
+    downside = ex[ex < 0].std() * np.sqrt(TD)
     dd = drawdown(equity)
     out = {
         "CAGR": cagr,
         "Volatility": vol,
-        "Sharpe": r.mean() / r.std() * np.sqrt(TD) if r.std() > 0 else np.nan,
-        "Sortino": r.mean() * TD / downside if downside > 0 else np.nan,
+        "Sharpe": ex.mean() / r.std() * np.sqrt(TD) if r.std() > 0 else np.nan,
+        "Sortino": ex.mean() * TD / downside if downside > 0 else np.nan,
         "Max drawdown": dd.min(),
         "Calmar": cagr / abs(dd.min()) if dd.min() < 0 else np.nan,
         "% positive months": (equity.resample("ME").last().pct_change().dropna() > 0).mean(),

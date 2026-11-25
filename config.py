@@ -20,11 +20,12 @@ MODEL_INFO = {
         "status": "live",
         "started": "2026-11-25",
         "summary": "Long/short trend following across 10 cross-asset ETFs, sized to 10% annualized volatility.",
+        "version": "v1.1",
         "how_it_works": [
             "Each ETF gets a trend score: the average sign of its 3, 6 and 12 month returns, skipping the latest month.",
             "Positive score means long, negative means short. Positions are sized by inverse volatility so each asset carries similar risk.",
             "The whole book is scaled to 10% annualized volatility, capped at 40% per position and 2x gross leverage.",
-            "Rebalances weekly on Friday's close.",
+            "Rebalances weekly on Friday's close. A no-trade band skips small re-sizings; only meaningful changes and direction flips trade.",
         ],
         "how_to_read": [
             "Expect it to lag in calm bull markets and to shine in long, persistent selloffs (2008, 2022).",
@@ -56,6 +57,9 @@ TSMOM = {
     "target_vol": 0.10,        # annualized portfolio volatility target
     "max_gross": 2.0,          # cap on sum(|weights|), i.e. max 2x leverage
     "max_weight": 0.40,        # cap on any single position (long or short)
+    # v1.1 no-trade band: only trade an asset if it's off target by more than
+    # max(2% of equity, 20% of its target weight). Direction flips always trade.
+    "band": (0.02, 0.20),
 }
 
 # ---- Backtest
@@ -64,10 +68,16 @@ BACKTEST = {
     "rebalance": "W-FRI",      # weekly, using Friday's close
     "cost_bps": 5,             # one-way trading cost per $ traded, in basis points
     "benchmark": {"SPY": 0.6, "IEF": 0.4},
+    # v1.1 financing: idle cash earns T-bills, shorts pay a borrow fee,
+    # longs above 100% of equity pay T-bills + a margin spread.
+    "cash_yield": True,
+    "borrow_bps": 30,
+    "margin_spread_bps": 100,
 }
 
 # ---- Live
 LIVE = {
     "rebalance_weekday": 4,    # 0=Mon ... 4=Fri. Trades go in after Friday's close, fill Monday open.
     "min_trade_weight": 0.01,  # skip trades smaller than 1% of equity (cuts noise trades)
+    "band": TSMOM["band"],     # no-trade band applied to the combined book on rebalance days
 }

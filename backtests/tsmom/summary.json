@@ -1,47 +1,66 @@
 {
   "synthetic": false,
+  "version": "v1.1",
   "stats": {
     "TSMOM": {
-      "CAGR": 0.04854308208447411,
-      "Volatility": 0.1073508075943871,
-      "Sharpe": 0.49548414053036277,
-      "Sortino": 0.6037072949284807,
-      "Max drawdown": -0.3053167722587914,
-      "Calmar": 0.15899251693689534,
+      "CAGR": 0.05099642333574428,
+      "Volatility": 0.10686307418014805,
+      "Sharpe": 0.3590418540606915,
+      "Sortino": 0.44073826209912387,
+      "Max drawdown": -0.31321549572592555,
+      "Calmar": 0.1628157739052857,
+      "% positive months": 0.628,
+      "Best year": 0.2094323391812507,
+      "Worst year": -0.11823669662446845,
+      "Correlation to benchmark": 0.17198126900887784,
+      "Avg gross leverage": 1.1831622971730837,
+      "Avg annual turnover": 19.62265077101733,
+      "Trading cost / yr": 0.009811325385508666
+    },
+    "TSMOM v1": {
+      "CAGR": 0.04838101643695558,
+      "Volatility": 0.10734195143182758,
+      "Sharpe": 0.33471495071367574,
+      "Sortino": 0.4136611449550056,
+      "Max drawdown": -0.30531681541709976,
+      "Calmar": 0.15846168305817435,
       "% positive months": 0.584,
-      "Best year": 0.20907654127177921,
-      "Worst year": -0.12200685269620648,
-      "Correlation to benchmark": 0.17198817085541213,
-      "Avg gross leverage": 1.1899856758912948,
-      "Avg annual turnover": 22.426341737297815
+      "Best year": 0.20907689389814643,
+      "Worst year": -0.12200627526762498,
+      "Correlation to benchmark": 0.17201467908805745,
+      "Avg gross leverage": 1.1902228038868647,
+      "Avg annual turnover": 22.400644795204474,
+      "Trading cost / yr": 0.011200322397602236
     },
     "60/40": {
-      "CAGR": 0.08005448474054377,
-      "Volatility": 0.10839128711298525,
-      "Sharpe": 0.7648037523078068,
-      "Sortino": 0.9631218996760095,
-      "Max drawdown": -0.3258494594529874,
-      "Calmar": 0.24567935412547096,
+      "CAGR": 0.07977800206638719,
+      "Volatility": 0.1083566771415517,
+      "Sharpe": 0.605499705727852,
+      "Sortino": 0.7643580194932118,
+      "Max drawdown": -0.32584979980133644,
+      "Calmar": 0.2448306002183402,
       "% positive months": 0.668,
-      "Best year": 0.21819759029290942,
-      "Worst year": -0.180067801156247,
+      "Best year": 0.21819807223142806,
+      "Worst year": -0.180067701787598,
       "Correlation to benchmark": NaN,
       "Avg gross leverage": NaN,
-      "Avg annual turnover": NaN
+      "Avg annual turnover": NaN,
+      "Trading cost / yr": NaN
     },
     "SPY": {
-      "CAGR": 0.10641501250919805,
-      "Volatility": 0.19242194589453676,
-      "Sharpe": 0.6219123021070301,
-      "Sortino": 0.7606785188328125,
-      "Max drawdown": -0.5518945143295657,
-      "Calmar": 0.19281766668485484,
+      "CAGR": 0.10569464025622932,
+      "Volatility": 0.19236557727229722,
+      "Sharpe": 0.5297271445261303,
+      "Sortino": 0.6497973424886985,
+      "Max drawdown": -0.5518945071695764,
+      "Calmar": 0.191512397538237,
       "% positive months": 0.664,
-      "Best year": 0.3230785336645936,
+      "Best year": 0.32307740999861223,
       "Worst year": -0.36795013179877045,
       "Correlation to benchmark": NaN,
       "Avg gross leverage": NaN,
-      "Avg annual turnover": NaN
+      "Avg annual turnover": NaN,
+      "Trading cost / yr": NaN
     }
   },
   "config": {
@@ -67,6 +86,11 @@
     "cov_window": 252,
     "target_vol": 0.1,
     "max_gross": 2.0,
-    "max_weight": 0.4
-  }
+    "max_weight": 0.4,
+    "band": [
+      0.02,
+      0.2
+    ]
+  },
+  "notes": "Sharpe/Sortino are in excess of 3-month T-bills. TSMOM = v1.1 (no-trade band + cash yield, borrow fees, margin cost). TSMOM v1 = original (no band, cash earns 0)."
 }

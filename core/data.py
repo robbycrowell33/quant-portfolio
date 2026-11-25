@@ -50,3 +50,21 @@ def synthetic_prices(tickers, start="2006-01-01", end="2026-11-20", seed=7) -> p
     common = rng.normal(0, 0.006, (n, 1))
     rets = drift + vols * rng.standard_normal((n, k)) * 0.8 + common * rng.uniform(-0.5, 1, k)
     return pd.DataFrame(100 * np.exp(np.cumsum(rets, axis=0)), index=idx, columns=tickers)
+
+
+def get_tbill_rate(start="2006-01-01", end=None) -> pd.Series:
+    """3-month T-bill yield, annualized decimal (e.g. 0.045), daily. Source: Yahoo ^IRX."""
+    import yfinance as yf
+    for attempt in range(3):
+        df = yf.download("^IRX", start=start, end=end, progress=False, threads=False, auto_adjust=False)
+        if not df.empty:
+            s = df["Close"]
+            s = s.iloc[:, 0] if isinstance(s, pd.DataFrame) else s
+            return (s / 100).rename("rf").ffill()
+    raise RuntimeError("Couldn't download T-bill rates (^IRX)")
+
+
+def synthetic_tbill(index) -> pd.Series:
+    """Fake T-bill path for offline tests: ~0% in the 2010s, ~4-5% at the ends."""
+    t = np.linspace(0, 1, len(index))
+    return pd.Series(0.045 * (np.cos(t * 2 * np.pi) + 1) / 2, index=index, name="rf")
