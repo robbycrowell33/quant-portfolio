@@ -6,6 +6,42 @@ SLEEVES = {
     "tsmom": 1.0,
 }
 
+# ---- Model registry: everything the dashboard shows about each model.
+# kind:   "sleeve" = trades real (paper) capital in the Alpaca account
+#         "signal" = tracked on paper only, not traded (for testing ideas live first)
+# status: "live", "paper", "research", or "retired"
+# Add a new model here + its code in models/ + (optionally) a backtest, and the
+# dashboard picks it up automatically.
+MODEL_INFO = {
+    "tsmom": {
+        "name": "Time-Series Momentum",
+        "short": "TSMOM",
+        "kind": "sleeve",
+        "status": "live",
+        "started": "2026-11-25",
+        "summary": "Long/short trend following across 10 cross-asset ETFs, sized to 10% annualized volatility.",
+        "how_it_works": [
+            "Each ETF gets a trend score: the average sign of its 3, 6 and 12 month returns, skipping the latest month.",
+            "Positive score means long, negative means short. Positions are sized by inverse volatility so each asset carries similar risk.",
+            "The whole book is scaled to 10% annualized volatility, capped at 40% per position and 2x gross leverage.",
+            "Rebalances weekly on Friday's close.",
+        ],
+        "how_to_read": [
+            "Expect it to lag in calm bull markets and to shine in long, persistent selloffs (2008, 2022).",
+            "Its job in the portfolio is diversification: low correlation to stocks and 60/40.",
+            "Weakness: sharp V-shaped reversals (COVID 2020) where trends flip faster than the lookbacks.",
+        ],
+    },
+}
+
+ASSET_CLASS = {
+    "SPY": "US equity", "QQQ": "US equity", "IWM": "US equity",
+    "EFA": "Intl equity", "EEM": "Intl equity",
+    "TLT": "Bonds", "IEF": "Bonds",
+    "GLD": "Commodities", "DBC": "Commodities",
+    "VNQ": "Real estate",
+}
+
 # ---- Time-series momentum (sleeve #1)
 TSMOM = {
     "universe": ["SPY", "QQQ", "IWM", "EFA", "EEM",   # equities

@@ -47,3 +47,12 @@ live/                equity.csv, positions, signals, trades (written by the job)
 - Cash earns 0% and short borrow costs are ignored in the backtest.
 - Trading cost is a flat 5 bps per side.
 - Backtest fills at the close; live orders fill at the next open.
+
+## Dashboard
+`dashboard/build.py` turns `live/` and `backtests/` into a one-page site (`site/index.html`).
+`.github/workflows/dashboard.yml` rebuilds and publishes it to GitHub Pages after every
+daily run and on every push. Preview locally with `python dashboard/build.py && open site/index.html`.
+
+To add a model: put its code in `models/`, add an entry to `config.MODEL_INFO`
+(and `config.SLEEVES` if it trades), run its backtest into `backtests/<id>/`, and push.
+It shows up as its own tab automatically.

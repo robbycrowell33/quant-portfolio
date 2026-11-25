@@ -1,0 +1,49 @@
+name: dashboard
+
+# Rebuilds and publishes the website:
+#  - right after every daily-live-run finishes (new data)
+#  - whenever you push code changes to main (new models, design tweaks)
+#  - manually from the Actions tab
+on:
+  workflow_run:
+    workflows: ["daily-live-run"]
+    types: [completed]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main            # always build from the latest data the bot committed
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python dashboard/build.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

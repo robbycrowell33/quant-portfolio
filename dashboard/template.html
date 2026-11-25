@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quant Portfolio</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f9; --surface: #ffffff; --ink: #191919; --ink-2: #666666;
+  --grid: #e7e7e7; --axis: #c2c2c2; --border: rgba(11,11,11,0.10);
+  --s1: #257de0; --s2: #f47230; --s3: #00b894;
+  --long: #257de0; --short: #ec4647; --neutral: #efefef;
+  --up: #006c10; --down: #dc3c3d;
+  --chip: #f1f1f1; --hover: rgba(11,11,11,0.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0b0b0b; --surface: #191919; --ink: #efefef; --ink-2: #9c9c9c;
+    --grid: #303030; --axis: #474747; --border: rgba(255,255,255,0.10);
+    --s1: #338ced; --s2: #e76624; --s3: #00a888;
+    --long: #338ced; --short: #eb6263; --neutral: #383838;
+    --up: #53c556; --down: #eb6263; --chip: #262626; --hover: rgba(255,255,255,0.05);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0b0b0b; --surface: #191919; --ink: #efefef; --ink-2: #9c9c9c;
+  --grid: #303030; --axis: #474747; --border: rgba(255,255,255,0.10);
+  --s1: #338ced; --s2: #e76624; --s3: #00a888;
+  --long: #338ced; --short: #eb6263; --neutral: #383838;
+  --up: #53c556; --down: #eb6263; --chip: #262626; --hover: rgba(255,255,255,0.05);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: inherit; }
+header { position: sticky; top: 0; z-index: 10; background: var(--surface);
+  border-bottom: 1px solid var(--border); }
+.bar { max-width: 1200px; margin: 0 auto; padding: 14px 24px 0; }
+.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brand h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+.brand .meta { color: var(--ink-2); font-size: 13px; }
+.brand .spacer { flex: 1; }
+nav { display: flex; gap: 4px; margin-top: 10px; overflow-x: auto; }
+nav a { text-decoration: none; padding: 8px 12px; border-bottom: 2px solid transparent;
+  color: var(--ink-2); white-space: nowrap; font-weight: 500; }
+nav a:hover { color: var(--ink); }
+nav a.active { color: var(--ink); border-bottom-color: var(--ink); }
+button.ghost { background: none; border: 1px solid var(--border); color: var(--ink-2);
+  border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+button.ghost:hover { color: var(--ink); background: var(--hover); }
+main { max-width: 1200px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; }
+.banner { background: var(--chip); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; color: var(--ink-2); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; min-width: 0; }
+.card h2 { font-size: 15px; margin: 0 0 2px; font-weight: 650; }
+.card .sub { color: var(--ink-2); font-size: 13px; margin: 0 0 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.tile .k { color: var(--ink-2); font-size: 12px; }
+.tile .v { font-size: 22px; font-weight: 600; margin-top: 2px; letter-spacing: -0.01em; }
+.tile.hero .v { font-size: 28px; }
+.tile .d { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+.up { color: var(--up); } .down { color: var(--down); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--ink-2); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--axis); white-space: nowrap; }
+td { padding: 7px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr:hover { background: var(--hover); }
+.scroll { overflow-x: auto; }
+.chip { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px;
+  background: var(--chip); color: var(--ink-2); font-weight: 500; }
+.dir { display: inline-flex; align-items: center; gap: 6px; }
+.dir i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; color: var(--ink-2); font-size: 12px; margin-bottom: 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend b { width: 14px; height: 2px; border-radius: 1px; display: inline-block; }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; overflow: visible; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  opacity: 0; transition: opacity .08s; min-width: 140px; z-index: 5; }
+.tip .t { color: var(--ink-2); margin-bottom: 4px; }
+.tip .row { display: flex; align-items: center; gap: 8px; }
+.tip .row b { width: 12px; height: 2px; display: inline-block; }
+.tip .row .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tip .row .nm { color: var(--ink-2); }
+.empty { color: var(--ink-2); padding: 28px 0; text-align: center; border: 1px dashed var(--axis); border-radius: 8px; }
+.toggle { display: inline-flex; gap: 4px; float: right; }
+.toggle button.on { color: var(--ink); background: var(--hover); }
+footer { max-width: 1200px; margin: 0 auto; padding: 0 24px 32px; color: var(--ink-2); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand">
+      <h1>Quant Portfolio</h1>
+      <span class="meta" id="meta"></span>
+      <span class="spacer"></span>
+      <button class="ghost" id="theme">Theme</button>
+    </div>
+    <nav id="nav"></nav>
+  </div>
+</header>
+<main id="app"></main>
+<footer id="foot"></footer>
+
+<script>
+const D = /*__DATA__*/null;
+
+// ---------- helpers ----------
+const $ = (tag, attrs = {}, ...kids) => {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") el.className = v; else if (k === "style") el.style.cssText = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v); else el.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) if (c != null) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return el;
+};
+const S = (tag, attrs = {}) => {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+};
+const isNum = v => typeof v === "number" && isFinite(v);
+const pct = (v, d = 1, sign = false) => !isNum(v) ? "–" : (sign && v > 0 ? "+" : "") + (v * 100).toFixed(d) + "%";
+const num = (v, d = 2) => !isNum(v) ? "–" : v.toFixed(d);
+const money = (v, d = 0) => !isNum(v) ? "–" : (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: d, maximumFractionDigits: d});
+const tone = v => !isNum(v) || v === 0 ? "" : v > 0 ? "up" : "down";
+const fmtDate = s => new Date(s + "T12:00:00").toLocaleDateString(undefined, {month: "short", day: "numeric", year: "numeric"});
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function tile(k, v, d, cls = "", vcls = "") {
+  return $("div", {class: "tile " + cls}, $("div", {class: "k"}, k), $("div", {class: "v " + vcls}, v), d ? $("div", {class: "d"}, d) : null);
+}
+function card(title, sub, ...body) {
+  return $("section", {class: "card"}, $("h2", {}, title), sub ? $("p", {class: "sub"}, sub) : null, ...body);
+}
+function table(cols, rows) {
+  // cols: [{h, f(row) -> text|Node, n:bool, cls(row)}]
+  return $("div", {class: "scroll"}, $("table", {},
+    $("thead", {}, $("tr", {}, cols.map(c => $("th", {class: c.n ? "n" : ""}, c.h)))),
+    $("tbody", {}, rows.map(r => $("tr", {}, cols.map(c => {
+      const v = c.f(r);
+      return $("td", {class: (c.n ? "n " : "") + (c.cls ? c.cls(r) : "")}, v);
+    }))))));
+}
+
+// ---------- line chart (SVG, crosshair + tooltip) ----------
+function lineChart(series, {height = 280, log = false, fmt = v => num(v), zero = false} = {}) {
+  const wrap = $("div", {class: "chart"});
+  const legend = $("div", {class: "legend"}, series.length > 1 ? series.map(s =>
+    $("span", {}, $("b", {style: `background:var(${s.color})`}), s.name)) : []);
+  const box = $("div", {class: "chart"});
+  wrap.append(legend, box);
+  const tip = $("div", {class: "tip"});
+  box.append(tip);
+
+  const draw = () => {
+    box.querySelectorAll("svg").forEach(n => n.remove());
+    const W = box.clientWidth, H = height, m = {t: 8, r: 12, b: 26, l: 56};
+    if (W < 120) return;
+    const xs = series[0].data.map(p => new Date(p[0] + "T12:00:00").getTime());
+    const all = series.flatMap(s => s.data.map(p => p[1])).filter(isNum);
+    if (zero) all.push(0);
+    let lo = Math.min(...all), hi = Math.max(...all);
+    if (lo === hi) { lo -= 1e-6 + Math.abs(lo) * 0.01; hi += 1e-6 + Math.abs(hi) * 0.01; }
+    const tf = log ? Math.log : v => v;
+    let ylo = tf(lo), yhi = tf(hi); const pad = (yhi - ylo) * 0.06; ylo -= pad; yhi += pad;
+    const x0 = xs[0], x1 = xs[xs.length - 1] || x0 + 1;
+    const X = t => m.l + (t - x0) / Math.max(1, x1 - x0) * (W - m.l - m.r);
+    const Y = v => m.t + (1 - (tf(v) - ylo) / (yhi - ylo)) * (H - m.t - m.b);
+    const svg = S("svg", {width: W, height: H, role: "img"});
+
+    // y grid + ticks
+    let ticks;
+    if (log) {
+      ticks = []; const cands = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 5, 7, 10, 15, 20];
+      for (const c of cands) if (c >= Math.exp(ylo) && c <= Math.exp(yhi)) ticks.push(c);
+      if (ticks.length < 2) ticks = [lo, hi];
+    } else {
+      const span = hi - lo, raw = span / 4, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      const step = [1, 2, 2.5, 5, 10].map(s => s * mag).find(s => s >= raw) || raw;
+      ticks = []; for (let v = Math.ceil(Math.min(...all) / step) * step; v <= hi + 1e-12; v += step) ticks.push(+v.toFixed(10));
+    }
+    for (const t of ticks) {
+      const y = Y(t);
+      svg.append(S("line", {x1: m.l, x2: W - m.r, y1: y, y2: y, stroke: cssVar(t === 0 && zero ? "--axis" : "--grid"), "stroke-width": 1}));
+      const lab = S("text", {x: m.l - 8, y: y + 4, "text-anchor": "end", fill: cssVar("--ink-2"), "font-size": 11});
+      lab.textContent = fmt(t); svg.append(lab);
+    }
+    // x ticks: years or months
+    const spanDays = (x1 - x0) / 864e5;
+    const d0 = new Date(x0), d1 = new Date(x1);
+    const xt = [];
+    if (spanDays > 1000) { const stepY = spanDays > 4000 ? 4 : 2; for (let y = d0.getFullYear() + 1; y <= d1.getFullYear(); y += stepY) xt.push([new Date(y, 0, 1).getTime(), String(y)]); }
+    else { const n = Math.max(2, Math.min(6, Math.round(W / 140))); for (let i = 0; i <= n; i++) { const t = x0 + (x1 - x0) * i / n; xt.push([t, new Date(t).toLocaleDateString(undefined, {month: "short", day: "numeric"})]); } }
+    svg.append(S("line", {x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, stroke: cssVar("--axis")}));
+    for (const [t, s] of xt) {
+      const lab = S("text", {x: X(t), y: H - 8, "text-anchor": "middle", fill: cssVar("--ink-2"), "font-size": 11});
+      lab.textContent = s; svg.append(lab);
+    }
+    // lines
+    for (const s of series) {
+      const d = s.data.filter(p => isNum(p[1])).map((p, i) => (i ? "L" : "M") + X(new Date(p[0] + "T12:00:00").getTime()).toFixed(1) + "," + Y(p[1]).toFixed(1)).join("");
+      svg.append(S("path", {d, fill: "none", stroke: cssVar(s.color), "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}));
+    }
+    // crosshair
+    const cross = S("line", {y1: m.t, y2: H - m.b, stroke: cssVar("--axis"), "stroke-width": 1, opacity: 0});
+    const dots = series.map(s => S("circle", {r: 4, fill: cssVar(s.color), stroke: cssVar("--surface"), "stroke-width": 2, opacity: 0}));
+    svg.append(cross, ...dots);
+    const hit = S("rect", {x: m.l, y: 0, width: W - m.l - m.r, height: H, fill: "transparent"});
+    svg.append(hit);
+    const move = ev => {
+      const r = svg.getBoundingClientRect(); const px = ev.clientX - r.left;
+      const t = x0 + (px - m.l) / (W - m.l - m.r) * (x1 - x0);
+      let i = 0, best = Infinity; xs.forEach((x, j) => { const d = Math.abs(x - t); if (d < best) { best = d; i = j; } });
+      const cx = X(xs[i]); cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("opacity", 1);
+      tip.replaceChildren($("div", {class: "t"}, fmtDate(series[0].data[i][0])));
+      series.forEach((s, k) => {
+        const p = s.data[i]; if (!p || !isNum(p[1])) { dots[k].setAttribute("opacity", 0); return; }
+        dots[k].setAttribute("cx", cx); dots[k].setAttribute("cy", Y(p[1])); dots[k].setAttribute("opacity", 1);
+        tip.append($("div", {class: "row"}, $("b", {style: `background:var(${s.color})`}), $("span", {class: "val"}, fmt(p[1])), $("span", {class: "nm"}, s.name)));
+      });
+      tip.style.opacity = 1;
+      const tw = tip.offsetWidth; tip.style.left = (cx + 14 + tw > W ? cx - tw - 14 : cx + 14) + "px"; tip.style.top = m.t + "px";
+    };
+    const leave = () => { cross.setAttribute("opacity", 0); dots.forEach(d => d.setAttribute("opacity", 0)); tip.style.opacity = 0; };
+    hit.addEventListener("pointermove", move); hit.addEventListener("pointerleave", leave);
+    box.prepend(svg);
+  };
+  requestAnimationFrame(draw);
+  new ResizeObserver(() => draw()).observe(box);
+  wrap._redraw = draw;
+  return wrap;
+}
+
+// ---------- diverging bars (long = blue, short = red) ----------
+function weightBars(items) {
+  const wrap = $("div", {class: "chart"});
+  const legend = $("div", {class: "legend"}, $("span", {}, $("b", {style: "background:var(--long);height:8px;width:8px;border-radius:2px"}), "Long"),
+    $("span", {}, $("b", {style: "background:var(--short);height:8px;width:8px;border-radius:2px"}), "Short"));
+  const box = $("div", {class: "chart"}); const tip = $("div", {class: "tip"}); box.append(tip);
+  wrap.append(legend, box);
+  const draw = () => {
+    box.querySelectorAll("svg").forEach(n => n.remove());
+    const W = box.clientWidth; if (W < 120) return;
+    const labW = Math.max(40, ...items.map(d => d.label.length * 7.2)) + 14;
+    const rowH = 26, m = {l: labW, r: 8}, gap = 52, H = items.length * rowH + 8;
+    const maxA = Math.max(0.05, ...items.map(d => Math.abs(d.value)));
+    const mid = m.l + (W - m.l - m.r) / 2, half = (W - m.l - m.r) / 2 - gap;
+    const svg = S("svg", {width: W, height: H});
+    svg.append(S("line", {x1: mid, x2: mid, y1: 0, y2: H, stroke: cssVar("--axis")}));
+    items.forEach((d, i) => {
+      const y = 4 + i * rowH, w = Math.abs(d.value) / maxA * half, bh = 14;
+      const lab = S("text", {x: m.l - 10, y: y + 15, "text-anchor": "end", fill: cssVar("--ink"), "font-size": 12, "font-weight": 600});
+      lab.textContent = d.label; svg.append(lab);
+      const x = d.value >= 0 ? mid + 1 : mid - 1 - w, r = Math.min(4, w / 2);
+      // rounded data-end only
+      const p = d.value >= 0
+        ? `M${x},${y + 4} h${w - r} a${r},${r} 0 0 1 ${r},${r} v${bh - 2 * r} a${r},${r} 0 0 1 ${-r},${r} h${-(w - r)} z`
+        : `M${x + w},${y + 4} h${-(w - r)} a${r},${r} 0 0 0 ${-r},${r} v${bh - 2 * r} a${r},${r} 0 0 0 ${r},${r} h${w - r} z`;
+      if (w > 0.5) svg.append(S("path", {d: p, fill: cssVar(d.value >= 0 ? "--long" : "--short")}));
+      const vl = S("text", {x: d.value >= 0 ? mid + w + 6 : mid - w - 6, y: y + 15, "text-anchor": d.value >= 0 ? "start" : "end", fill: cssVar("--ink-2"), "font-size": 11});
+      vl.textContent = pct(d.value, 1, true); svg.append(vl);
+      const hit = S("rect", {x: 0, y, width: W, height: rowH, fill: "transparent"});
+      hit.addEventListener("pointermove", ev => {
+        const r = svg.getBoundingClientRect();
+        tip.replaceChildren($("div", {class: "t"}, d.label + " · " + (d.sub || "")),
+          $("div", {class: "row"}, $("span", {class: "val"}, pct(d.value, 1, true)), $("span", {class: "nm"}, "of equity")),
+          d.extra ? $("div", {class: "row"}, $("span", {class: "val"}, d.extra), $("span", {class: "nm"}, "market value")) : null);
+        tip.style.opacity = 1; tip.style.left = Math.min(ev.clientX - r.left + 12, W - 170) + "px"; tip.style.top = (y + rowH) + "px";
+      });
+      hit.addEventListener("pointerleave", () => tip.style.opacity = 0);
+      svg.append(hit);
+    });
+    box.prepend(svg);
+  };
+  requestAnimationFrame(draw); new ResizeObserver(() => draw()).observe(box);
+  return wrap;
+}
+
+// ---------- pages ----------
+const models = D.models || [];
+function navTo() {
+  const h = location.hash.replace(/^#\/?/, "") || "overview";
+  const nav = document.getElementById("nav"); nav.replaceChildren();
+  const link = (id, label) => nav.append($("a", {href: "#/" + id, class: h === id ? "active" : ""}, label));
+  link("overview", "Overview");
+  models.forEach(m => link("model/" + m.id, m.short || m.name));
+  link("trades", "Trades");
+  const app = document.getElementById("app"); app.replaceChildren();
+  if (D.test_data) app.append($("div", {class: "banner"}, "Showing synthetic test data. Numbers are not real."));
+  if (h.startsWith("model/")) modelPage(app, models.find(m => "model/" + m.id === h));
+  else if (h === "trades") tradesPage(app);
+  else overview(app);
+  window.scrollTo(0, 0);
+}
+
+function overview(app) {
+  const A = D.account;
+  if (!A) { app.append(card("No live data yet", "The daily job hasn't logged an account snapshot yet. Check back after the next run.")); return; }
+  const tr = A.equity / A.start_equity - 1, st = A.stats || {};
+  const gross = (A.long_mv - A.short_mv) / A.equity, net = (A.long_mv + A.short_mv) / A.equity;
+  app.append($("div", {class: "tiles"},
+    tile("Account equity", money(A.equity), "Started at " + money(A.start_equity), "hero"),
+    tile("Total return", pct(tr, 2, true), isNum(st["60/40 return"]) ? "60/40: " + pct(st["60/40 return"], 2, true) : "since " + fmtDate(A.curve[0][0]), "", tone(tr)),
+    tile("Last day", money(A.day_change), pct(A.day_change / (A.equity - A.day_change), 2, true) + " day change", "", tone(A.day_change)),
+    tile("Gross exposure", pct(gross, 0), "Longs + shorts, as % of equity"),
+    tile("Net exposure", pct(net, 0, true), "Longs minus shorts"),
+  ));
+
+  const eqCard = card("Account equity vs 60/40", "60/40 is scaled to the same starting equity, rebalanced monthly.");
+  if (A.curve.length >= 2) eqCard.append(lineChart([
+    {name: "Portfolio", color: "--s1", data: A.curve},
+    {name: "60/40", color: "--s2", data: A.bench}], {fmt: v => money(v)}));
+  else eqCard.append($("div", {class: "empty"}, "Live tracking started " + fmtDate(A.curve[0][0]) + ". The chart fills in as daily snapshots come in."));
+  app.append(eqCard);
+
+  app.append(card("Models", "Every model in the registry. Sleeves trade the account; signals are tracked on paper only.",
+    table([
+      {h: "Model", f: m => $("a", {href: "#/model/" + m.id}, m.name)},
+      {h: "Type", f: m => $("span", {class: "chip"}, m.kind === "sleeve" ? "Sleeve" : "Signal")},
+      {h: "Status", f: m => $("span", {class: "chip"}, m.status)},
+      {h: "Allocation", n: true, f: m => m.kind === "sleeve" ? pct(m.allocation, 0) : "–"},
+      {h: "Live return", n: true, f: m => pct(m.live?.stats?.["Total return"], 2, true), cls: m => tone(m.live?.stats?.["Total return"])},
+      {h: "Backtest Sharpe", n: true, f: m => num(Object.values(m.backtest?.stats || {})[0]?.Sharpe)},
+      {h: "Backtest max DD", n: true, f: m => pct(Object.values(m.backtest?.stats || {})[0]?.["Max drawdown"], 1)},
+    ], models)));
+
+  const P = [...D.positions].sort((a, b) => b.weight - a.weight);
+  const posGrid = $("div", {class: "grid2"});
+  posGrid.append(card("Positions", "Weight as % of account equity. Hover a bar for details.",
+    P.length ? weightBars(P.map(p => ({label: p.ticker, value: p.weight, sub: p.asset_class, extra: money(p.value)}))) : $("div", {class: "empty"}, "No open positions")));
+  posGrid.append(card("Holdings", "As of " + (D.asof ? fmtDate(D.asof) : "–"),
+    table([
+      {h: "Ticker", f: p => $("b", {}, p.ticker)},
+      {h: "Class", f: p => p.asset_class},
+      {h: "Side", f: p => $("span", {class: "dir"}, $("i", {style: `background:var(${p.qty > 0 ? "--long" : "--short"})`}), p.qty > 0 ? "Long" : "Short")},
+      {h: "Shares", n: true, f: p => p.qty},
+      {h: "Value", n: true, f: p => money(p.value)},
+      {h: "Weight", n: true, f: p => pct(p.weight, 1, true)},
+    ], P)));
+  app.append(posGrid);
+
+  const byClass = {};
+  P.forEach(p => { byClass[p.asset_class] = (byClass[p.asset_class] || 0) + p.weight; });
+  app.append($("div", {class: "grid2"},
+    card("Exposure by asset class", "Net weight per class (longs minus shorts).",
+      weightBars(Object.entries(byClass).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({label: k, value: v, sub: "net"})))),
+    card("Recent trades", "Latest orders sent to Alpaca. Full log on the Trades tab.", tradeTable(D.trades.slice(0, 10)))));
+}
+
+function tradeTable(rows) {
+  if (!rows.length) return $("div", {class: "empty"}, "No trades yet");
+  return table([
+    {h: "Date", f: t => t.date},
+    {h: "Ticker", f: t => $("b", {}, t.ticker)},
+    {h: "Side", f: t => $("span", {class: "dir"}, $("i", {style: `background:var(${t.qty > 0 ? "--long" : "--short"})`}), t.qty > 0 ? "Buy" : "Sell")},
+    {h: "Shares", n: true, f: t => Math.abs(t.qty)},
+    {h: "Ref price", n: true, f: t => money(t.ref_price, 2)},
+    {h: "Notional", n: true, f: t => money(Math.abs(t.qty * t.ref_price))},
+    {h: "Reason", f: t => t.reason},
+  ], rows);
+}
+function tradesPage(app) { app.append(card("Trade log", D.trades.length + " most recent orders", tradeTable(D.trades))); }
+
+function modelPage(app, m) {
+  if (!m) { app.append(card("Model not found", "")); return; }
+  app.append($("section", {class: "card"},
+    $("div", {style: "display:flex;gap:8px;align-items:center;flex-wrap:wrap"},
+      $("h2", {style: "font-size:20px;margin:0"}, m.name),
+      $("span", {class: "chip"}, m.kind === "sleeve" ? "Sleeve · " + pct(m.allocation, 0) + " of capital" : "Signal (paper only)"),
+      $("span", {class: "chip"}, m.status), m.started ? $("span", {class: "chip"}, "Live since " + fmtDate(m.started)) : null),
+    $("p", {class: "sub", style: "margin:8px 0 0"}, m.summary)));
+  app.append($("div", {class: "grid2"},
+    card("How it works", null, $("ul", {class: "plain"}, (m.how_it_works || []).map(s => $("li", {}, s)))),
+    card("How to read it", null, $("ul", {class: "plain"}, (m.how_to_read || []).map(s => $("li", {}, s))))));
+
+  // live
+  const L = m.live;
+  const liveCard = card("Live performance", "This model's own P&L, rebuilt from its target weights, vs 60/40.");
+  if (L && L.curve.length >= 2) {
+    const s = L.stats || {};
+    liveCard.append($("div", {class: "tiles", style: "margin-bottom:14px"},
+      tile("Return", pct(s["Total return"], 2, true), "", "", tone(s["Total return"])),
+      tile("60/40", pct(s["60/40 return"], 2, true), "", "", tone(s["60/40 return"])),
+      tile("Max drawdown", pct(s["Max drawdown"], 1)),
+      tile("Days live", s["Days live"]),
+      isNum(s.Sharpe) ? tile("Sharpe (ann.)", num(s.Sharpe)) : null));
+    liveCard.append(lineChart([{name: m.short || m.name, color: "--s1", data: L.curve}, {name: "60/40", color: "--s2", data: L.bench}], {fmt: v => pct(v - 1, 1, true)}));
+  } else liveCard.append($("div", {class: "empty"}, "Not enough live history yet. This fills in after a couple of trading days."));
+  app.append(liveCard);
+
+  // signals
+  if (m.signals && m.signals.length) {
+    const lbs = Object.keys(m.signals[0]).filter(k => k.startsWith("ret_")).sort((a, b) => parseInt(a.slice(4)) - parseInt(b.slice(4)));
+    const lbName = k => ({63: "3m", 126: "6m", 252: "12m"}[parseInt(k.slice(4))] || k.slice(4));
+    const rows = [...m.signals].sort((a, b) => b.weight - a.weight);
+    app.append(card("Current signals", "What the model sees right now" + (m.signals_asof ? ", as of " + fmtDate(m.signals_asof) : "") + ". Trend score is the average of the signs: +1 = up on every lookback, -1 = down on every lookback.",
+      table([
+        {h: "Ticker", f: r => $("b", {}, r.ticker)},
+        ...lbs.map(k => ({h: lbName(k) + " return", n: true, f: r => pct(r[k], 1, true), cls: r => tone(r[k])})),
+        {h: "Trend score", n: true, f: r => (r.strength > 0 ? "+" : "") + num(r.strength, 2)},
+        {h: "Volatility", n: true, f: r => pct(r.vol_ann, 1)},
+        {h: "Target weight", n: true, f: r => pct(r.weight, 1, true)},
+        {h: "Position", f: r => $("span", {class: "dir"}, $("i", {style: `background:var(${r.weight >= 0 ? "--long" : "--short"})`}), Math.abs(r.weight) < 1e-4 ? "Flat" : r.weight > 0 ? "Long" : "Short")},
+      ], rows)));
+  }
+
+  // backtest
+  const B = m.backtest;
+  if (B) {
+    let log = true;
+    const series = () => [{name: m.short || m.name, color: "--s1", data: B.curves.model}, {name: "60/40", color: "--s2", data: B.curves.bench}, {name: "SPY", color: "--s3", data: B.curves.spy}];
+    const holder = $("div");
+    const render = () => holder.replaceChildren(lineChart(series(), {log, fmt: v => "$" + v.toFixed(2), height: 320}));
+    const bLog = $("button", {class: "ghost on", onclick: () => { log = true; bLog.classList.add("on"); bLin.classList.remove("on"); render(); }}, "Log");
+    const bLin = $("button", {class: "ghost", onclick: () => { log = false; bLin.classList.add("on"); bLog.classList.remove("on"); render(); }}, "Linear");
+    render();
+    const head = $("section", {class: "card"}, $("div", {class: "toggle"}, bLog, bLin), $("h2", {}, "Backtest: growth of $1"),
+      $("p", {class: "sub"}, "Weekly, " + B.curves.model[0][0].slice(0, 4) + " to " + B.curves.model.at(-1)[0].slice(0, 4) + (B.synthetic ? " (synthetic data)" : "") + ". Log scale shows percentage moves at equal size."), holder);
+    app.append(head);
+    app.append(card("Backtest: drawdown", "How far each line sat below its previous high.",
+      lineChart([{name: m.short || m.name, color: "--s1", data: B.drawdown.model}, {name: "60/40", color: "--s2", data: B.drawdown.bench}, {name: "SPY", color: "--s3", data: B.drawdown.spy}], {fmt: v => pct(v, 0), zero: true, height: 220})));
+
+    const names = Object.keys(B.stats);
+    const keys = Object.keys(B.stats[names[0]]);
+    const isPct = k => /CAGR|Volatility|drawdown|months|year|turnover/i.test(k) && !/turnover/i.test(k);
+    app.append($("div", {class: "grid2"},
+      card("Backtest statistics", "Full-period figures.", table([
+        {h: "", f: r => r.k},
+        ...names.map(n => ({h: n, n: true, f: r => { const v = B.stats[n][r.k]; return !isNum(v) ? "–" : isPct(r.k) ? pct(v, 1) : num(v, 2); }})),
+      ], keys.map(k => ({k})))),
+      card("Crisis periods", "Return over each stress window.", table([
+        {h: "Period", f: r => r.period},
+        ...names.map(n => ({h: n, n: true, f: r => pct(r[n], 1, true), cls: r => tone(r[n])})),
+      ], B.crisis))));
+    app.append(card("Returns by year", null, table([
+      {h: "Year", f: r => r.year},
+      ...names.map(n => ({h: n, n: true, f: r => pct(r[n], 1, true), cls: r => tone(r[n])})),
+    ], [...B.yearly].reverse())));
+  }
+}
+
+// ---------- boot ----------
+document.getElementById("meta").textContent = "Paper trading" + (D.asof ? " · as of " + fmtDate(D.asof) : "");
+document.getElementById("foot").textContent = "Generated " + new Date(D.generated_utc).toLocaleString() + ". Paper trading on Alpaca. Not investment advice.";
+const themes = ["auto", "light", "dark"]; let ti = 0;
+try { ti = Math.max(0, themes.indexOf(localStorage.getItem("theme") || "auto")); } catch (e) {}
+const applyTheme = () => {
+  const t = themes[ti]; if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  document.getElementById("theme").textContent = "Theme: " + t;
+};
+document.getElementById("theme").addEventListener("click", () => { ti = (ti + 1) % 3; try { localStorage.setItem("theme", themes[ti]); } catch (e) {} applyTheme(); navTo(); });
+applyTheme();
+window.addEventListener("hashchange", navTo);
+navTo();
+</script>
+</body>
+</html>
