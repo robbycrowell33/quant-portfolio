@@ -3,18 +3,34 @@ import numpy as np
 import pandas as pd
 
 
-def get_prices(tickers, start="2006-01-01", end=None) -> pd.DataFrame:
+def get_prices(tickers, start="2006-01-01", end=None, attempts=3) -> pd.DataFrame:
+    """Download adjusted closes. Single-threaded with retries: yfinance's parallel
+    mode can randomly fail a ticker ('database is locked' on its cache file)."""
+    import tempfile
+    import time
     import yfinance as yf
 
-    df = yf.download(tickers, start=start, end=end, auto_adjust=True,
-                     progress=False, threads=True)["Close"]
-    if isinstance(df, pd.Series):
-        df = df.to_frame(tickers[0])
-    df = df[tickers].dropna(how="all").ffill()
-    missing = [t for t in tickers if df[t].isna().all()]
+    try:
+        yf.set_tz_cache_location(tempfile.mkdtemp())   # fresh cache, avoids lock clashes
+    except Exception:
+        pass
+    frames, missing = {}, list(tickers)
+    for attempt in range(attempts):
+        if not missing:
+            break
+        if attempt:
+            time.sleep(5 * attempt)
+        df = yf.download(missing, start=start, end=end, auto_adjust=True,
+                         progress=False, threads=False)["Close"]
+        if isinstance(df, pd.Series):
+            df = df.to_frame(missing[0])
+        for t in list(missing):
+            if t in df and df[t].notna().any():
+                frames[t] = df[t]
+                missing.remove(t)
     if missing:
-        raise RuntimeError(f"No data for: {missing}")
-    return df
+        raise RuntimeError(f"No data for: {missing} after {attempts} attempts")
+    return pd.DataFrame(frames)[list(tickers)].dropna(how="all").ffill()
 
 
 def synthetic_prices(tickers, start="2006-01-01", end="2026-11-20", seed=7) -> pd.DataFrame:
